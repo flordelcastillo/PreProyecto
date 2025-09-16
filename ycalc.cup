@@ -1,67 +1,34 @@
 /*
-  File Name: ycalc.cup
-  To Create: > java java_cup.Main < ycalc.cup
+  File Name: ycalc_ast.cup
+  Parser modificado para generar AST en lugar de strings
+  To Create: > java java_cup.Main < ycalc_ast.cup
 */
-   
-   
-/* ----------------------Preliminary Declarations Section--------------------*/
-   
+
 import java_cup.runtime.*;
-   
+import java.util.List;
+import java.util.ArrayList;
+
 parser code {:
-    
+
     public void report_error(String message, Object info) {
-   
-        /* Create a StringBuffer called 'm' with the string 'Error' in it. */
         StringBuffer m = new StringBuffer("Error");
-   
-        /* Check if the information passed to the method is the same
-           type as the type java_cup.runtime.Symbol. */
         if (info instanceof java_cup.runtime.Symbol) {
-            /* Declare a java_cup.runtime.Symbol object 's' with the
-               information in the object info that is being typecasted
-               as a java_cup.runtime.Symbol object. */
             java_cup.runtime.Symbol s = ((java_cup.runtime.Symbol) info);
-   
-            /* Check if the line number in the input is greater or
-               equal to zero. */
-            if (s.left >= 0) {                
-                /* Add to the end of the StringBuffer error message
-                   the line number of the error in the input. */
-                m.append(" in line "+(s.left+1));   
-                /* Check if the column number in the input is greater
-                   or equal to zero. */
-                if (s.right >= 0)                    
-                    /* Add to the end of the StringBuffer error message
-                       the column number of the error in the input. */
+            if (s.left >= 0) {
+                m.append(" in line "+(s.left+1));
+                if (s.right >= 0)
                     m.append(", column "+(s.right+1));
             }
         }
-   
-        /* Add to the end of the StringBuffer error message created in
-           this method the message that was passed into this method. */
         m.append(" : "+message);
-   
-        /* Print the contents of the StringBuffer 'm', which contains
-           an error message, out on a line. */
         System.err.println(m);
     }
-   
-    /* Change the method report_fatal_error so when it reports a fatal
-       error it will display the line and column number of where the
-       fatal error occurred in the input as well as the reason for the
-       fatal error which is passed into the method in the object
-       'message' and then exit.*/
+
     public void report_fatal_error(String message, Object info) {
         report_error(message, info);
         System.exit(1);
     }
 :};
-   
-
-   
-/* ------------Declaration of Terminals and Non Terminals Section----------- */
-   
 
 /* Terminal symbols (tokens) */
 terminal           SEMI, COMMA, ASSIGN;
@@ -71,113 +38,74 @@ terminal           INT, BOOL, VOID, MAIN, RETURN;
 terminal           TRUE, FALSE;
 terminal Integer   NUMBER;
 terminal String    ID;
-   
 
-/* Non-terminal symbols */
-non terminal       program;
-non terminal       function_def;
-non terminal       param_list, param_list_opt;
-non terminal       param;
-non terminal       type;
-non terminal       stmt_list;
-non terminal       stmt;
-non terminal       declaration;
-non terminal       assignment;
-non terminal       return_stmt;
-non terminal       expr;
-non terminal       var_list;
-   
+/* Non-terminal symbols - ahora retornan nodos del AST */
+non terminal ProgramNode        program;
+non terminal FunctionDefNode    function_def;
+non terminal List               param_list, param_list_opt;
+non terminal ParamNode          param;
+non terminal String             type;
+non terminal List               stmt_list;
+non terminal StmtNode           stmt;
+non terminal DeclarationNode    declaration;
+non terminal AssignmentNode     assignment;
+non terminal ReturnStmtNode     return_stmt;
+non terminal ExprNode           expr;
+non terminal List               var_list;
 
-/* -------------Precedence and Associatively of Terminals Section----------- */
-   
-/*
-  Precedence of operators from lowest to highest precedence.
-  Operations on the same line have the same precedence and are
-  left associative.
-*/   
-precedence left PLUS, MINUS; 
-precedence left TIMES, DIVIDE; 
+/* Precedence */
+precedence left PLUS, MINUS;
+precedence left TIMES, DIVIDE;
 
+/* Grammar Rules */
 
-
-/* ----------------------------Grammar Section-------------------- */
-   
-/* Extended grammar for variable declarations, assignments, and expressions
-   
-   program     ::= function_def
-   
-   function_def ::= type MAIN LPAREN param_list_opt RPAREN LBRACE stmt_list RBRACE
-   
-   param_list_opt ::= param_list | empty
-   param_list ::= param_list COMMA param | param
-   param       ::= type ID
-   
-   type        ::= INT | BOOL | VOID
-   
-   stmt_list   ::= stmt_list stmt | stmt 
-   
-   stmt        ::= declaration SEMI
-                 | assignment SEMI  
-                 | return_stmt SEMI
-                 | expr SEMI
-   
-   declaration ::= type var_list
-   
-   var_list    ::= var_list COMMA ID
-                 | var_list COMMA ID ASSIGN expr
-                 | ID
-                 | ID ASSIGN expr
-
-   assignment  ::= ID ASSIGN expr
-   
-   return_stmt ::= RETURN expr
-                 | RETURN
-   
-   expr        ::= expr PLUS expr
-                 | expr MINUS expr
-                 | expr TIMES expr
-                 | expr DIVIDE expr
-                 | LPAREN expr RPAREN
-                 | NUMBER
-                 | TRUE
-                 | FALSE
-                 | ID
-*/
-   
- 
 program ::= function_def:f
-            {:   
-                RESULT = f; :}
+            {:
+                System.out.println("AST generado exitosamente!");
+                RESULT = new ProgramNode(f);
+            :}
             ;
 
 function_def ::= type:t MAIN LPAREN param_list_opt:p RPAREN LBRACE stmt_list:s RBRACE
-                 {: 
-                     RESULT = "function"; :}
+                 {:
+                     List<ParamNode> params = (p != null) ? (List<ParamNode>)p : new ArrayList<ParamNode>();
+                     List<StmtNode> statements = (List<StmtNode>)s;
+                     RESULT = new FunctionDefNode(t, "main", params, statements);
+                 :}
                  ;
 
 param_list_opt ::= param_list:p
                    {:  RESULT = p; :}
                    |
                    /* empty */
-                   {:  RESULT = null; :}
+                   {:  RESULT = new ArrayList<ParamNode>(); :}
                    ;
 
 param_list ::= param_list:pl COMMA param:p
-               {:  RESULT = pl; :}
+               {:
+                   List<ParamNode> list = (List<ParamNode>)pl;
+                   list.add(p);
+                   RESULT = list;
+               :}
                |
                param:p
-               {:  RESULT = p; :}
+               {:
+                   List<ParamNode> list = new ArrayList<ParamNode>();
+                   list.add(p);
+                   RESULT = list;
+               :}
                ;
 
 param ::= type:t ID:id
-          {:  
-              RESULT = t + " " + id; :}
+          {:
+              RESULT = new ParamNode(t, id);
+          :}
           ;
 
 type ::= INT
          {:  RESULT = "int"; :}
          |
-         BOOL  
+         BOOL
          {:  RESULT = "bool"; :}
          |
          VOID
@@ -185,98 +113,136 @@ type ::= INT
          ;
 
 stmt_list ::= stmt_list:sl stmt:s
-              {:  RESULT = sl; :}
+              {:
+                  List<StmtNode> list = (List<StmtNode>)sl;
+                  list.add(s);
+                  RESULT = list;
+              :}
               |
               stmt:s
-              {:  RESULT = s; :}
+              {:
+                  List<StmtNode> list = new ArrayList<StmtNode>();
+                  list.add(s);
+                  RESULT = list;
+              :}
               ;
 
 stmt ::= declaration:d SEMI
-         {:   
-             RESULT = d; :}
+         {:
+             RESULT = d;
+         :}
          |
          assignment:a SEMI
-         {:  
-             RESULT = a; :}
+         {:
+             RESULT = a;
+         :}
          |
          return_stmt:r SEMI
-         {: 
-             RESULT = r; :}
+         {:
+             RESULT = r;
+         :}
          |
          expr:e SEMI
-         {:  
-             RESULT = e; :}
+         {:
+             RESULT = new ExprStmtNode(e);
+         :}
          ;
 
 declaration ::= type:t var_list:vl
-                {: 
-                    RESULT = t + " " + vl; :}
+                {:
+                    List<VarDeclNode> variables = (List<VarDeclNode>)vl;
+                    RESULT = new DeclarationNode(t, variables);
+                :}
                 ;
 
 var_list ::= var_list:vl COMMA ID:id
-             {:  
-                 RESULT = vl + ", " + id; :}
+             {:
+                 List<VarDeclNode> list = (List<VarDeclNode>)vl;
+                 list.add(new VarDeclNode(id, null));
+                 RESULT = list;
+             :}
              |
              var_list:vl COMMA ID:id ASSIGN expr:e
-             {:  
-                 RESULT = vl + ", " + id + " = " + e; :}
+             {:
+                 List<VarDeclNode> list = (List<VarDeclNode>)vl;
+                 list.add(new VarDeclNode(id, e));
+                 RESULT = list;
+             :}
              |
              ID:id
-             {:  
-                 RESULT = id; :}
+             {:
+                 List<VarDeclNode> list = new ArrayList<VarDeclNode>();
+                 list.add(new VarDeclNode(id, null));
+                 RESULT = list;
+             :}
              |
              ID:id ASSIGN expr:e
-             {:  
-                 RESULT = id + " = " + e; :}
+             {:
+                 List<VarDeclNode> list = new ArrayList<VarDeclNode>();
+                 list.add(new VarDeclNode(id, e));
+                 RESULT = list;
+             :}
              ;
 
 assignment ::= ID:id ASSIGN expr:e
-               {:  
-                   RESULT = id + " = " + e; :}
+               {:
+                   RESULT = new AssignmentNode(id, e);
+               :}
                ;
 
 return_stmt ::= RETURN expr:e
-                {:  
-                    RESULT = "return " + e; :}
+                {:
+                    RESULT = new ReturnStmtNode(e);
+                :}
                 |
                 RETURN
-                {:   
-                    RESULT = "return"; :}
+                {:
+                    RESULT = new ReturnStmtNode(null);
+                :}
                 ;
 
 expr ::= expr:e1 PLUS expr:e2
-         {:   
-             RESULT = "(" + e1 + "+" + e2 + ")"; :}
+         {:
+             RESULT = new BinaryOpNode(e1, BinaryOpNode.Operator.PLUS, e2);
+         :}
          |
          expr:e1 MINUS expr:e2
-         {:   
-             RESULT = "(" + e1 + "-" + e2 + ")"; :}
+         {:
+             RESULT = new BinaryOpNode(e1, BinaryOpNode.Operator.MINUS, e2);
+         :}
          |
          expr:e1 TIMES expr:e2
-         {:   
-             RESULT = "(" + e1 + "*" + e2 + ")"; :}
+         {:
+             RESULT = new BinaryOpNode(e1, BinaryOpNode.Operator.TIMES, e2);
+         :}
          |
          expr:e1 DIVIDE expr:e2
-         {:   
-             RESULT = "(" + e1 + "/" + e2 + ")"; :}
+         {:
+             RESULT = new BinaryOpNode(e1, BinaryOpNode.Operator.DIVIDE, e2);
+         :}
          |
          LPAREN expr:e RPAREN
-         {:  
-             RESULT = e; :}
+         {:
+             RESULT = e;
+         :}
          |
          NUMBER:n
-         {:   
-             RESULT = n; :}
+         {:
+             RESULT = new NumberNode(n);
+         :}
          |
          TRUE
-         {:   
-             RESULT = "true"; :}
+         {:
+             RESULT = new BooleanNode(true);
+         :}
          |
          FALSE
-         {:   
-             RESULT = "false"; :}
+         {:
+             RESULT = new BooleanNode(false);
+         :}
          |
          ID:id
-         {:  
-             RESULT = id; :}
+         {:
+             RESULT = new VariableNode(id);
+         :}
          ;
